@@ -1,0 +1,9 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Seat map styles */
+.seat { width:34px; height:34px; border-radius:6px; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; }
+.seat--available{ background: #f3f4f6; }
+.seat--selected{ background: #7c3aed; color:white; transform: scale(1.05); }
+.seat--taken{ background: #ef4444; color:white; cursor:not-allowed; }

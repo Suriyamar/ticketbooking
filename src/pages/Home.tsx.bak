@@ -1,0 +1,217 @@
+import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
+import { supabase } from '../lib/supabase';
+import type { Database } from '../lib/database.types';
+import { Calendar, Clock, Users, ChevronRight, Search } from 'lucide-react';
+
+type Show = Database['public']['Tables']['shows']['Row'];
+type Booking = Database['public']['Tables']['bookings']['Row'];
+
+interface ShowWithBookings extends Show {
+  bookedSeats: number;
+}
+
+export const Home: React.FC = () => {
+  const [shows, setShows] = useState<ShowWithBookings[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterType, setFilterType] = useState<'all' | 'show' | 'trip' | 'appointment'>('all');
+
+  useEffect(() => {
+    fetchShows();
+  }, []);
+
+  const fetchShows = async () => {
+    try {
+      setLoading(true);
+      setError('');
+
+      const { data: showsData, error: showsError } = await supabase
+        .from('shows')
+        .select('*')
+        .gte('start_time', new Date().toISOString())
+        .order('start_time', { ascending: true });
+
+      if (showsError) throw showsError;
+
+      const { data: bookingsData, error: bookingsError } = await supabase
+        .from('bookings')
+        .select('show_id, seat_number')
+        .eq('status', 'CONFIRMED');
+
+      if (bookingsError) throw bookingsError;
+
+      const bookingsByShow = bookingsData.reduce((acc, booking) => {
+        if (!acc[booking.show_id]) {
+          acc[booking.show_id] = 0;
+        }
+        acc[booking.show_id]++;
+        return acc;
+      }, {} as Record<string, number>);
+
+      const showsWithBookings: ShowWithBookings[] = (showsData || []).map((show) => ({
+        ...show,
+        bookedSeats: bookingsByShow[show.id] || 0,
+      }));
+
+      setShows(showsWithBookings);
+    } catch (err) {
+      setError('Failed to fetch shows. Please try again.');
+      console.error('Error fetching shows:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const formatDateTime = (dateString: string) => {
+    return new Date(dateString).toLocaleString('en-US', {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    });
+  };
+
+  const getAvailability = (show: ShowWithBookings) => {
+    if (show.type === 'appointment') {
+      return show.bookedSeats === 0 ? 'Available' : 'Booked';
+    }
+    const available = (show.total_seats || 0) - show.bookedSeats;
+    return available > 0 ? `${available} seats available` : 'Sold Out';
+  };
+
+  const isAvailable = (show: ShowWithBookings) => {
+    if (show.type === 'appointment') {
+      return show.bookedSeats === 0;
+    }
+    return (show.total_seats || 0) - show.bookedSeats > 0;
+  };
+
+  const filteredShows = shows.filter((show) => {
+    const matchesSearch = show.name.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesType = filterType === 'all' || show.type === filterType;
+    return matchesSearch && matchesType;
+  });
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-white rounded-lg shadow-md p-6">
+        <h1 className="text-3xl font-bold text-gray-900 mb-6">Available Shows & Bookings</h1>
+
+        <div className="flex flex-col sm:flex-row gap-4">
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+            <input
+              type="text"
+              placeholder="Search shows..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+          </div>
+
+          <select
+            value={filterType}
+            onChange={(e) => setFilterType(e.target.value as typeof filterType)}
+            className="px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          >
+            <option value="all">All Types</option>
+            <option value="show">Shows</option>
+            <option value="trip">Trips</option>
+            <option value="appointment">Appointments</option>
+          </select>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="bg-white rounded-lg shadow-md p-12 text-center">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent"></div>
+          <p className="mt-4 text-gray-600">Loading available shows...</p>
+        </div>
+      ) : error ? (
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <div className="p-4 bg-red-50 border border-red-200 rounded-md text-red-700">
+            {error}
+          </div>
+          <button
+            onClick={fetchShows}
+            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+          >
+            Retry
+          </button>
+        </div>
+      ) : filteredShows.length === 0 ? (
+        <div className="bg-white rounded-lg shadow-md p-12 text-center text-gray-500">
+          <Calendar className="w-16 h-16 mx-auto mb-4 text-gray-400" />
+          <p className="text-lg">
+            {searchTerm || filterType !== 'all'
+              ? 'No shows match your search criteria'
+              : 'No upcoming shows available at the moment'}
+          </p>
+        </div>
+      ) : (
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {filteredShows.map((show) => {
+            const available = isAvailable(show);
+
+            return (
+              <div
+                key={show.id}
+                className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow"
+              >
+                <div className="p-6">
+                  <div className="flex items-start justify-between mb-4">
+                    <h3 className="text-xl font-bold text-gray-900">{show.name}</h3>
+                    <span className="px-3 py-1 text-xs font-medium bg-blue-100 text-blue-700 rounded-full">
+                      {show.type}
+                    </span>
+                  </div>
+
+                  <div className="space-y-3 mb-4">
+                    <div className="flex items-center space-x-2 text-gray-600">
+                      <Clock className="w-5 h-5 flex-shrink-0" />
+                      <span className="text-sm">{formatDateTime(show.start_time)}</span>
+                    </div>
+
+                    {show.total_seats !== null && (
+                      <div className="flex items-center space-x-2 text-gray-600">
+                        <Users className="w-5 h-5 flex-shrink-0" />
+                        <span className="text-sm">
+                          {show.bookedSeats} / {show.total_seats} booked
+                        </span>
+                      </div>
+                    )}
+
+                    <div className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
+                      available
+                        ? 'bg-green-100 text-green-700'
+                        : 'bg-red-100 text-red-700'
+                    }`}>
+                      {getAvailability(show)}
+                    </div>
+                  </div>
+
+                  {available ? (
+                    <Link
+                      to={`/booking/${show.id}`}
+                      className="flex items-center justify-center space-x-2 w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition-colors font-medium"
+                    >
+                      <span>Book Now</span>
+                      <ChevronRight className="w-4 h-4" />
+                    </Link>
+                  ) : (
+                    <button
+                      disabled
+                      className="w-full bg-gray-300 text-gray-500 py-2 px-4 rounded-md cursor-not-allowed font-medium"
+                    >
+                      {show.type === 'appointment' ? 'Booked' : 'Sold Out'}
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};

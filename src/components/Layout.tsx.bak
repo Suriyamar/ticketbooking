@@ -1,0 +1,81 @@
+import React from 'react';
+import { Link, useLocation } from 'react-router-dom';
+import { useApp } from '../context/AppContext';
+import { Ticket, User, Shield } from 'lucide-react';
+
+interface LayoutProps {
+  children: React.ReactNode;
+}
+
+export const Layout: React.FC<LayoutProps> = ({ children }) => {
+  const { userRole, setUserRole } = useApp();
+  const location = useLocation();
+
+  const isActive = (path: string) => {
+    return location.pathname === path;
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-blue-100">
+      <nav className="bg-white shadow-md">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
+            <div className="flex items-center space-x-8">
+              <Link to="/" className="flex items-center space-x-2 text-blue-600 font-bold text-xl">
+                <Ticket className="w-6 h-6" />
+                <span>BookEase</span>
+              </Link>
+
+              <div className="flex space-x-4">
+                <Link
+                  to="/"
+                  className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                    isActive('/')
+                      ? 'bg-blue-100 text-blue-700'
+                      : 'text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  Browse Shows
+                </Link>
+                <Link
+                  to="/admin"
+                  className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                    isActive('/admin')
+                      ? 'bg-blue-100 text-blue-700'
+                      : 'text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  Admin Panel
+                </Link>
+              </div>
+            </div>
+
+            <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-2 px-3 py-1 bg-gray-100 rounded-full">
+                {userRole === 'admin' ? (
+                  <Shield className="w-4 h-4 text-blue-600" />
+                ) : (
+                  <User className="w-4 h-4 text-gray-600" />
+                )}
+                <span className="text-sm font-medium text-gray-700">
+                  {userRole === 'admin' ? 'Admin' : 'User'}
+                </span>
+              </div>
+
+              <button
+                onClick={() => setUserRole(userRole === 'admin' ? 'user' : 'admin')}
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors"
+              >
+                Switch to {userRole === 'admin' ? 'User' : 'Admin'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </nav>
+
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {children}
+      </main>
+    </div>
+  );
+};
